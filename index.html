@@ -1,0 +1,1076 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no"/>
+<meta name="theme-color" content="#16a34a"/>
+<link rel="manifest" href="manifest.json"/>
+<title>⚡ Exunion AttendPro</title>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;font-family:'Cairo',sans-serif}
+body{background:#f9fafb;min-height:100vh}
+::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:#16a34a;border-radius:4px}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+@keyframes slideUp{from{transform:translateX(-50%) translateY(20px);opacity:0}to{transform:translateX(-50%) translateY(0);opacity:1}}
+.fade{animation:fadeIn .3s ease}
+.btn{border:none;border-radius:10px;padding:10px 20px;font-size:14px;font-family:'Cairo';font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:all .15s;white-space:nowrap}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn:hover:not(:disabled){filter:brightness(1.08);transform:translateY(-1px)}
+.card{background:#fff;border-radius:16px;padding:20px;box-shadow:0 1px 12px rgba(0,0,0,.08)}
+input,select,textarea{font-family:'Cairo';font-size:14px;color:#1f2937;outline:none;width:100%;border:1.5px solid #e5e7eb;border-radius:10px;padding:10px 14px;background:#fff;box-sizing:border-box;transition:border-color .2s}
+input:focus,select:focus,textarea:focus{border-color:#16a34a;box-shadow:0 0 0 3px rgba(22,163,74,.1)}
+label{display:block;font-size:13px;font-weight:700;color:#374151;margin-bottom:5px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{padding:11px 14px;font-weight:800;color:#1f2937;text-align:right;background:#f9fafb;border-bottom:1px solid #e5e7eb;white-space:nowrap}
+td{padding:11px 14px;border-bottom:1px solid #e5e7eb;color:#374151}
+tr:hover td{background:#f9fafb}
+.badge{border-radius:20px;padding:3px 10px;font-size:12px;font-weight:700;white-space:nowrap;display:inline-block}
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;display:flex;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(4px)}
+.modal{background:#fff;border-radius:20px;width:100%;max-width:480px;max-height:90vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+.modal-head{display:flex;align-items:center;justify-content:space-between;padding:18px 20px;border-bottom:1px solid #e5e7eb;position:sticky;top:0;background:#fff;z-index:1}
+.toast{position:fixed;bottom:90px;left:50%;transform:translateX(-50%);color:#fff;border-radius:12px;padding:12px 24px;font-size:14px;font-weight:700;z-index:9999;box-shadow:0 4px 20px rgba(0,0,0,.2);max-width:320px;text-align:center;animation:slideUp .3s ease;pointer-events:none;display:none}
+.spinner{width:40px;height:40px;border:3px solid #e5e7eb;border-top-color:#16a34a;border-radius:50%;animation:spin .8s linear infinite;margin:0 auto}
+</style>
+</head>
+<body>
+<div id="root">
+  <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#0f4c1e,#16a34a)">
+    <div style="text-align:center;color:#fff">
+      <div style="font-size:48px;margin-bottom:16px">⚡</div>
+      <div class="spinner" style="border-color:rgba(255,255,255,.3);border-top-color:#fff;margin:0 auto 16px"></div>
+      <div style="font-size:18px;font-weight:700">جاري التحميل...</div>
+    </div>
+  </div>
+</div>
+<div id="toast" class="toast"></div>
+
+<script type="module">
+// ══════════════════════════════════════════════════════════
+// 🔥 FIREBASE CONFIG — إعدادات خالد الحقيقية
+// ══════════════════════════════════════════════════════════
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+import {
+  getAuth, signInWithPopup, GoogleAuthProvider,
+  createUserWithEmailAndPassword, signInWithEmailAndPassword,
+  signOut, onAuthStateChanged, updateProfile, sendPasswordResetEmail
+} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import {
+  getFirestore, collection, doc, setDoc, getDoc,
+  addDoc, updateDoc, query, where, orderBy,
+  onSnapshot, serverTimestamp
+} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyA6IrUocADP4a_kYHxVOIP1t8_TfGleyEM",
+  authDomain: "exunion-attendpro.firebaseapp.com",
+  projectId: "exunion-attendpro",
+  storageBucket: "exunion-attendpro.firebasestorage.app",
+  messagingSenderId: "275916272735",
+  appId: "1:275916272735:web:a2eafafe8e1406ba82d7ea",
+  measurementId: "G-E5GJ2C033F"
+};
+
+// إيميل الأدمن — غيّره لإيميلك
+const ADMIN_EMAILS = ["omoomoomo43@gmail.com"];
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const googleProvider = new GoogleAuthProvider();
+
+// ══════════════════════════════════════════════════════════
+// 🛠️ HELPERS
+// ══════════════════════════════════════════════════════════
+const todayStr = () => new Date().toISOString().split("T")[0];
+const fmtDate = d => { if(!d) return "—"; const dt=d?.toDate?d.toDate():new Date(d); return dt.toLocaleDateString("ar-SA",{year:"numeric",month:"short",day:"numeric"}); };
+const fmtTime = d => { if(!d) return "—"; const dt=d?.toDate?d.toDate():new Date(d); return dt.toLocaleTimeString("ar-SA",{hour:"2-digit",minute:"2-digit"}); };
+const diffH = (a,b) => { if(!a||!b) return "0"; const da=a?.toDate?a.toDate():new Date(a), db=b?.toDate?b.toDate():new Date(b); return Math.max(0,(db-da)/3600000).toFixed(1); };
+const genId = () => Math.random().toString(36).slice(2);
+
+let toastTimer;
+function toast(msg, type="success") {
+  const el = document.getElementById("toast");
+  const colors = {success:"#16a34a", error:"#dc2626", info:"#1e40af"};
+  el.textContent = msg; el.style.background = colors[type]||colors.success;
+  el.style.display = "block";
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>el.style.display="none", 3500);
+}
+
+function badge(text, color="#16a34a") {
+  return `<span class="badge" style="background:${color}20;color:${color}">${text}</span>`;
+}
+function statusBadge(s) {
+  const m={present:["حاضر","#16a34a"],absent:["غائب","#dc2626"],late:["متأخر","#f97316"],onLeave:["إجازة","#1e40af"],pending:["معلق","#d97706"],approved:["موافق","#16a34a"],rejected:["مرفوض","#dc2626"]};
+  const [t,c]=m[s]||[s,"#6b7280"]; return badge(t,c);
+}
+
+// Modal helper
+function openModal(title, body, onConfirm) {
+  document.getElementById("modal-overlay")?.remove();
+  const div = document.createElement("div");
+  div.id="modal-overlay"; div.className="modal-bg";
+  div.innerHTML=`<div class="modal"><div class="modal-head"><h3 style="font-size:16px;font-weight:800;color:#1f2937">${title}</h3><button onclick="document.getElementById('modal-overlay').remove()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#6b7280">✕</button></div><div style="padding:20px">${body}</div></div>`;
+  div.addEventListener("click",e=>e.target===div&&div.remove());
+  document.body.appendChild(div);
+  if(onConfirm) div.querySelector("#mc")?.addEventListener("click",()=>{onConfirm();div.remove();});
+}
+window.closeModal = () => document.getElementById("modal-overlay")?.remove();
+
+// ══════════════════════════════════════════════════════════
+// 👤 USER DOC
+// ══════════════════════════════════════════════════════════
+async function ensureUserDoc(user, extraName=null) {
+  const ref = doc(db,"users",user.uid);
+  const snap = await getDoc(ref);
+  const isAdmin = ADMIN_EMAILS.includes(user.email);
+  if(!snap.exists()) {
+    await setDoc(ref, {
+      uid:user.uid, email:user.email,
+      name:extraName||user.displayName||user.email.split("@")[0],
+      photo:user.photoURL||null,
+      role: isAdmin?"admin":"employee",
+      status: isAdmin?"active":"pending",
+      department:"", jobTitle:"", phone:"", salary:0,
+      joinDate:serverTimestamp(), createdAt:serverTimestamp(),
+    });
+  } else if(isAdmin && snap.data().role!=="admin") {
+    await updateDoc(ref,{role:"admin",status:"active"});
+  }
+  return (await getDoc(ref)).data();
+}
+
+// ══════════════════════════════════════════════════════════
+// 🔐 STATE
+// ══════════════════════════════════════════════════════════
+let STATE = { user:null, userDoc:null, adminTab:"dashboard", empTab:"home", reqFilter:"pending", repMonth:new Date().toISOString().slice(0,7), empMonth:new Date().toISOString().slice(0,7), empReqTab:"new", attDate:todayStr(), reqForm:{type:"leave",leaveType:"annual",fromDate:todayStr(),toDate:todayStr(),reason:"",amount:"",description:""} };
+
+// ══════════════════════════════════════════════════════════
+// 🔥 AUTH LISTENER
+// ══════════════════════════════════════════════════════════
+onAuthStateChanged(auth, async user => {
+  if(user) {
+    STATE.user = user;
+    STATE.userDoc = await ensureUserDoc(user);
+    onSnapshot(doc(db,"users",user.uid), s=>{ if(s.exists()){STATE.userDoc=s.data(); reRender(); }});
+    reRender();
+  } else {
+    STATE.user=null; STATE.userDoc=null;
+    renderLogin();
+  }
+});
+
+function reRender() {
+  if(!STATE.userDoc) return renderLogin();
+  if(STATE.userDoc.status==="pending") return renderPending();
+  if(STATE.userDoc.status==="rejected") return renderRejected();
+  if(STATE.userDoc.role==="admin") return renderAdmin();
+  renderEmployee();
+}
+
+// ══════════════════════════════════════════════════════════
+// 🔐 LOGIN
+// ══════════════════════════════════════════════════════════
+function renderLogin() {
+  document.getElementById("root").innerHTML = `
+  <div style="min-height:100vh;background:linear-gradient(135deg,#0f4c1e,#16a34a);display:flex;align-items:center;justify-content:center;padding:16px">
+    <div style="width:100%;max-width:400px;animation:fadeIn .4s ease">
+      <div style="text-align:center;margin-bottom:28px">
+        <div style="width:72px;height:72px;background:rgba(255,255,255,.15);border-radius:20px;display:inline-flex;align-items:center;justify-content:center;font-size:36px;margin-bottom:12px">⚡</div>
+        <h1 style="color:#fff;font-size:26px;font-weight:900;margin:0">Exunion AttendPro</h1>
+        <p style="color:rgba(255,255,255,.75);font-size:14px;margin:6px 0 0">نظام إدارة الحضور والموارد البشرية</p>
+      </div>
+      <div class="card" style="border-radius:20px;padding:28px">
+        <div style="display:flex;background:#f9fafb;border-radius:12px;padding:4px;margin-bottom:24px;gap:4px">
+          <button id="tab-login" onclick="switchAuthTab('login')" style="flex:1;padding:9px;border-radius:9px;border:none;background:#fff;color:#16a34a;font-weight:800;font-size:14px;cursor:pointer;font-family:'Cairo';box-shadow:0 1px 6px rgba(0,0,0,.1)">دخول</button>
+          <button id="tab-reg" onclick="switchAuthTab('register')" style="flex:1;padding:9px;border-radius:9px;border:none;background:transparent;color:#6b7280;font-weight:700;font-size:14px;cursor:pointer;font-family:'Cairo'">تسجيل جديد</button>
+        </div>
+
+        <!-- Google -->
+        <button onclick="loginGoogle()" style="width:100%;padding:12px;border:1.5px solid #e5e7eb;border-radius:10px;background:#fff;cursor:pointer;font-size:14px;font-weight:700;color:#374151;display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:16px;font-family:'Cairo';transition:all .15s" onmouseover="this.style.borderColor='#16a34a'" onmouseout="this.style.borderColor='#e5e7eb'">
+          <svg width="18" height="18" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+          الدخول بحساب Google
+        </button>
+
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
+          <div style="flex:1;height:1px;background:#e5e7eb"></div>
+          <span style="color:#9ca3af;font-size:12px">أو بالإيميل</span>
+          <div style="flex:1;height:1px;background:#e5e7eb"></div>
+        </div>
+
+        <div id="reg-name-wrap" style="display:none;margin-bottom:12px">
+          <label>الاسم الكامل *</label>
+          <input id="auth-name" placeholder="محمد العدواني"/>
+        </div>
+        <div style="margin-bottom:12px">
+          <label>البريد الإلكتروني *</label>
+          <input id="auth-email" type="email" placeholder="example@gmail.com"/>
+        </div>
+        <div style="margin-bottom:8px">
+          <label>كلمة المرور *</label>
+          <input id="auth-pass" type="password" placeholder="••••••••"/>
+        </div>
+
+        <div id="forgot-wrap" style="text-align:center;margin-bottom:12px">
+          <button onclick="resetPassword()" style="background:none;border:none;color:#16a34a;font-size:13px;cursor:pointer;font-family:'Cairo'">نسيت كلمة المرور؟</button>
+        </div>
+
+        <div id="auth-error" style="display:none;background:#fee2e2;color:#dc2626;border-radius:8px;padding:8px 12px;font-size:13px;margin-bottom:12px;text-align:center"></div>
+
+        <button id="auth-submit" onclick="submitAuth()" style="width:100%;padding:12px;background:#16a34a;color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:800;cursor:pointer;font-family:'Cairo';transition:all .15s" onmouseover="this.style.background='#15803d'" onmouseout="this.style.background='#16a34a'">
+          🔑 تسجيل الدخول
+        </button>
+
+        <p style="font-size:11px;color:#9ca3af;text-align:center;margin-top:14px;line-height:1.7">
+          بعد التسجيل، سيراجع الأدمن حسابك ويفعّله
+        </p>
+      </div>
+    </div>
+  </div>`;
+}
+
+let authMode = "login";
+window.switchAuthTab = (mode) => {
+  authMode = mode;
+  const isReg = mode==="register";
+  document.getElementById("reg-name-wrap").style.display = isReg?"block":"none";
+  document.getElementById("forgot-wrap").style.display = isReg?"none":"block";
+  document.getElementById("auth-submit").textContent = isReg?"✨ إنشاء حساب":"🔑 تسجيل الدخول";
+  document.getElementById("tab-login").style.background = isReg?"transparent":"#fff";
+  document.getElementById("tab-login").style.color = isReg?"#6b7280":"#16a34a";
+  document.getElementById("tab-login").style.boxShadow = isReg?"none":"0 1px 6px rgba(0,0,0,.1)";
+  document.getElementById("tab-reg").style.background = isReg?"#fff":"transparent";
+  document.getElementById("tab-reg").style.color = isReg?"#16a34a":"#6b7280";
+  document.getElementById("tab-reg").style.boxShadow = isReg?"0 1px 6px rgba(0,0,0,.1)":"none";
+};
+
+window.loginGoogle = async () => {
+  try {
+    const cred = await signInWithPopup(auth, googleProvider);
+    await ensureUserDoc(cred.user);
+  } catch(e) {
+    showAuthError(e.code==="auth/popup-closed-by-user"?"تم إغلاق نافذة الدخول":e.message);
+  }
+};
+
+window.submitAuth = async () => {
+  const email = document.getElementById("auth-email").value.trim();
+  const pass = document.getElementById("auth-pass").value;
+  const name = document.getElementById("auth-name")?.value.trim();
+  if(!email||!pass){showAuthError("يرجى ملء جميع الحقول");return;}
+  const btn = document.getElementById("auth-submit");
+  btn.disabled=true; btn.textContent="⏳ جاري التحميل...";
+  try {
+    if(authMode==="register") {
+      if(!name){showAuthError("يرجى إدخال الاسم");btn.disabled=false;btn.textContent="✨ إنشاء حساب";return;}
+      const cred = await createUserWithEmailAndPassword(auth,email,pass);
+      await updateProfile(cred.user,{displayName:name});
+      await ensureUserDoc(cred.user,name);
+    } else {
+      await signInWithEmailAndPassword(auth,email,pass);
+    }
+  } catch(e) {
+    const msgs={"auth/email-already-in-use":"هذا الإيميل مسجل مسبقاً","auth/wrong-password":"كلمة المرور خاطئة","auth/user-not-found":"المستخدم غير موجود","auth/weak-password":"كلمة المرور ضعيفة (6 أحرف على الأقل)","auth/invalid-email":"إيميل غير صحيح","auth/invalid-credential":"إيميل أو كلمة مرور خاطئة"};
+    showAuthError(msgs[e.code]||e.message);
+    btn.disabled=false; btn.textContent=authMode==="register"?"✨ إنشاء حساب":"🔑 تسجيل الدخول";
+  }
+};
+
+window.resetPassword = async () => {
+  const email = document.getElementById("auth-email").value.trim();
+  if(!email){showAuthError("أدخل إيميلك أولاً");return;}
+  try { await sendPasswordResetEmail(auth,email); toast("تم إرسال رابط إعادة التعيين لإيميلك ✅"); }
+  catch(e){ showAuthError(e.message); }
+};
+
+function showAuthError(msg) {
+  const el=document.getElementById("auth-error");
+  if(el){el.style.display="block";el.textContent=msg;}
+}
+
+// ══════════════════════════════════════════════════════════
+// ⏳ PENDING / REJECTED
+// ══════════════════════════════════════════════════════════
+function renderPending() {
+  document.getElementById("root").innerHTML=`
+  <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:#f9fafb;padding:16px">
+    <div class="card" style="max-width:380px;text-align:center;padding:40px">
+      <div style="font-size:56px;margin-bottom:16px">⏳</div>
+      <h2 style="font-size:20px;font-weight:800;color:#1f2937;margin-bottom:8px">حسابك قيد المراجعة</h2>
+      <p style="color:#6b7280;font-size:14px;line-height:1.8;margin-bottom:20px">سيقوم الأدمن بمراجعة طلبك وتفعيل حسابك قريباً</p>
+      <p style="color:#374151;font-size:13px;margin-bottom:24px">📧 ${STATE.user?.email}</p>
+      <button class="btn" style="background:#dc2626;color:#fff;width:100%;justify-content:center" onclick="doLogout()">🚪 تسجيل الخروج</button>
+    </div>
+  </div>`;
+}
+
+function renderRejected() {
+  document.getElementById("root").innerHTML=`
+  <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:#f9fafb;padding:16px">
+    <div class="card" style="max-width:380px;text-align:center;padding:40px">
+      <div style="font-size:56px;margin-bottom:16px">🚫</div>
+      <h2 style="font-size:20px;font-weight:800;color:#dc2626;margin-bottom:8px">تم رفض حسابك</h2>
+      <p style="color:#6b7280;font-size:14px;margin-bottom:24px">تواصل مع مسؤول النظام للمزيد من المعلومات</p>
+      <button class="btn" style="background:#dc2626;color:#fff;width:100%;justify-content:center" onclick="doLogout()">🚪 تسجيل الخروج</button>
+    </div>
+  </div>`;
+}
+
+window.doLogout = async () => { await signOut(auth); };
+
+// ══════════════════════════════════════════════════════════
+// 👑 ADMIN APP
+// ══════════════════════════════════════════════════════════
+function renderAdmin() {
+  const tabs=[{id:"dashboard",l:"لوحة التحكم",ic:"📊"},{id:"attendance",l:"الحضور",ic:"📋"},{id:"employees",l:"الموظفون",ic:"👥"},{id:"requests",l:"الطلبات",ic:"📩"},{id:"reports",l:"التقارير",ic:"📈"}];
+  const u=STATE.userDoc;
+  document.getElementById("root").innerHTML=`
+  <div style="direction:rtl;background:#f9fafb;min-height:100vh;display:flex;flex-direction:column">
+    <div style="background:#fff;border-bottom:1px solid #e5e7eb;padding:12px 20px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;box-shadow:0 1px 8px rgba(0,0,0,.06)">
+      <div style="display:flex;align-items:center;gap:10px">
+        <div style="width:36px;height:36px;background:#16a34a;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;color:#fff">⚡</div>
+        <div><div style="font-size:14px;font-weight:800;color:#1f2937">Exunion AttendPro</div><div style="font-size:11px;color:#16a34a;font-weight:700">لوحة الأدمن</div></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <div style="text-align:left"><div style="font-size:13px;font-weight:700;color:#1f2937">${u.name}</div><div style="font-size:11px;color:#6b7280">مدير النظام</div></div>
+        ${u.photo?`<img src="${u.photo}" style="width:34px;height:34px;border-radius:50%;object-fit:cover">`:`<div style="width:34px;height:34px;border-radius:50%;background:#dcfce7;display:flex;align-items:center;justify-content:center">👑</div>`}
+        <button class="btn" style="background:none;border:1.5px solid #e5e7eb;color:#6b7280;padding:5px 12px;font-size:12px" onclick="doLogout()">خروج</button>
+      </div>
+    </div>
+    <div style="display:flex;flex:1">
+      <div style="width:200px;background:#fff;border-left:1px solid #e5e7eb;padding:16px 0;flex-shrink:0;position:sticky;top:58px;height:calc(100vh - 58px);overflow-y:auto">
+        ${tabs.map(t=>`<button onclick="STATE.adminTab='${t.id}';renderAdmin()" style="display:flex;align-items:center;gap:10px;width:100%;padding:11px 20px;border:none;background:${STATE.adminTab===t.id?'#dcfce7':'transparent'};color:${STATE.adminTab===t.id?'#16a34a':'#374151'};font-weight:${STATE.adminTab===t.id?800:600};font-size:14px;cursor:pointer;text-align:right;border-right:3px solid ${STATE.adminTab===t.id?'#16a34a':'transparent'};transition:all .15s;font-family:'Cairo'"><span style="font-size:18px">${t.ic}</span><span>${t.l}</span></button>`).join("")}
+      </div>
+      <div id="admin-content" style="flex:1;padding:24px;overflow-y:auto;max-height:calc(100vh - 58px)">
+        <div class="spinner" style="margin-top:60px"></div>
+      </div>
+    </div>
+  </div>`;
+  loadAdminTab();
+}
+
+function loadAdminTab() {
+  const fns={dashboard:adminDashboard,attendance:adminAttendance,employees:adminEmployees,requests:adminRequests,reports:adminReports};
+  (fns[STATE.adminTab]||adminDashboard)();
+}
+
+// ─── DASHBOARD ───────────────────────────────────────────
+function adminDashboard() {
+  const today=todayStr();
+  const el=document.getElementById("admin-content");
+
+  let usersUnsub, attUnsub, reqUnsub;
+  let allUsers=[], todayAtt=[], pendingReqs=[];
+
+  function render() {
+    const activeEmps=allUsers.filter(u=>u.role==="employee"&&u.status==="active");
+    const pendingEmps=allUsers.filter(u=>u.role==="employee"&&u.status==="pending");
+    const present=todayAtt.filter(a=>a.status==="present"||a.status==="late").length;
+
+    el.innerHTML=`<div class="fade">
+    <div style="margin-bottom:24px">
+      <h2 style="font-size:22px;font-weight:900;color:#1f2937;margin:0">مرحباً، ${STATE.userDoc.name} 👋</h2>
+      <p style="color:#6b7280;font-size:14px;margin-top:4px">${new Date().toLocaleDateString("ar-SA",{weekday:"long",year:"numeric",month:"long",day:"numeric"})}</p>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:24px">
+      ${[["إجمالي الموظفين",activeEmps.length,"👥","#1e40af","#dbeafe"],["حضور اليوم",present,"✅","#16a34a","#dcfce7"],["غياب اليوم",Math.max(0,activeEmps.length-present),"❌","#dc2626","#fee2e2"],["بانتظار الموافقة",pendingEmps.length,"⏳","#d97706","#fefce8"]].map(([l,v,ic,c,bg])=>`
+      <div class="card" style="background:${bg};border:1px solid ${c}20">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><span style="font-size:28px">${ic}</span><span style="font-size:28px;font-weight:900;color:${c}">${v}</span></div>
+        <div style="font-size:13px;font-weight:700;color:${c}">${l}</div>
+      </div>`).join("")}
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+      <div class="card">
+        <h3 style="font-size:15px;font-weight:800;color:#1f2937;margin:0 0 16px">⏳ موظفون بانتظار الموافقة (${pendingEmps.length})</h3>
+        ${pendingEmps.length===0?`<div style="text-align:center;padding:24px;color:#6b7280"><div style="font-size:32px;margin-bottom:8px">✅</div>لا يوجد طلبات معلقة</div>`
+        :pendingEmps.map(u=>`<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid #e5e7eb">
+          <div><div style="font-size:14px;font-weight:700;color:#1f2937">${u.name}</div><div style="font-size:12px;color:#6b7280">${u.email}</div></div>
+          <div style="display:flex;gap:6px">
+            <button class="btn" style="background:#16a34a;color:#fff;font-size:12px;padding:5px 12px" onclick="approveUser('${u.uid}')">موافقة</button>
+            <button class="btn" style="background:none;border:2px solid #dc2626;color:#dc2626;font-size:12px;padding:5px 12px" onclick="rejectUser('${u.uid}')">رفض</button>
+          </div>
+        </div>`).join("")}
+      </div>
+      <div class="card">
+        <h3 style="font-size:15px;font-weight:800;color:#1f2937;margin:0 0 16px">📩 طلبات معلقة (${pendingReqs.length})</h3>
+        ${pendingReqs.length===0?`<div style="text-align:center;padding:24px;color:#6b7280"><div style="font-size:32px;margin-bottom:8px">✅</div>لا يوجد طلبات معلقة</div>`
+        :pendingReqs.slice(0,5).map(r=>`<div style="padding:10px 0;border-bottom:1px solid #e5e7eb">
+          <div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="font-size:13px;font-weight:700;color:#1f2937">${r.employeeName}</span>${statusBadge("pending")}</div>
+          <div style="font-size:12px;color:#6b7280">${r.type==="leave"?`إجازة: ${r.fromDate} ← ${r.toDate}`:r.type==="loan"?`سلفة: ${Number(r.amount||0).toLocaleString("ar")} ريال`:r.type==="custody"?`عهدة: ${r.description||""}`:r.type}</div>
+          <div style="display:flex;gap:6px;margin-top:6px">
+            <button class="btn" style="background:#16a34a;color:#fff;font-size:11px;padding:4px 10px" onclick="approveReq('${r.id}')">✅ موافقة</button>
+            <button class="btn" style="background:none;border:1.5px solid #dc2626;color:#dc2626;font-size:11px;padding:4px 10px" onclick="openRejectReq('${r.id}')">❌ رفض</button>
+          </div>
+        </div>`).join("")}
+      </div>
+    </div>
+    </div>`;
+  }
+
+  usersUnsub = onSnapshot(collection(db,"users"), snap=>{allUsers=snap.docs.map(d=>d.data());render();});
+  attUnsub = onSnapshot(query(collection(db,"attendance"),where("date","==",today)), snap=>{todayAtt=snap.docs.map(d=>d.data());render();});
+  reqUnsub = onSnapshot(query(collection(db,"requests"),where("status","==","pending"),orderBy("createdAt","desc")), snap=>{pendingReqs=snap.docs.map(d=>({id:d.id,...d.data()}));render();});
+}
+
+// ─── ATTENDANCE ──────────────────────────────────────────
+function adminAttendance() {
+  const el=document.getElementById("admin-content");
+  let employees=[], attRecords=[];
+
+  function render() {
+    const date=STATE.attDate;
+    const dayAtt=attRecords.filter(a=>a.date===date);
+    const getAtt=uid=>dayAtt.find(a=>a.uid===uid);
+    const summary=["present","absent","late","onLeave"].map(s=>{
+      const c={present:"#16a34a",absent:"#dc2626",late:"#f97316",onLeave:"#1e40af"}[s];
+      const bg={present:"#dcfce7",absent:"#fee2e2",late:"#ffedd5",onLeave:"#dbeafe"}[s];
+      const lbl={present:"حاضر",absent:"غائب",late:"متأخر",onLeave:"إجازة"}[s];
+      const cnt=s==="absent"?Math.max(0,employees.length-dayAtt.filter(a=>a.status!=="absent").length):dayAtt.filter(a=>a.status===s).length;
+      return `<div style="flex:1;background:${bg};border-radius:12px;padding:12px 16px"><div style="font-size:20px;font-weight:900;color:${c}">${cnt}</div><div style="font-size:12px;font-weight:700;color:${c}">${lbl}</div></div>`;
+    }).join("");
+
+    el.innerHTML=`<div class="fade">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+      <h2 style="font-size:20px;font-weight:900;color:#1f2937;margin:0">📋 الحضور والغياب</h2>
+      <input type="date" value="${date}" onchange="STATE.attDate=this.value;adminAttendance()" style="border:1.5px solid #e5e7eb;border-radius:8px;padding:8px 12px;font-size:14px"/>
+    </div>
+    <div style="display:flex;gap:12px;margin-bottom:20px">${summary}</div>
+    <div class="card" style="padding:0;overflow:hidden">
+      <div style="overflow-x:auto">
+        <table><thead><tr><th>الموظف</th><th>القسم</th><th>الحالة</th><th>حضور</th><th>انصراف</th><th>ساعات</th><th>إجراء</th></tr></thead>
+        <tbody>${employees.length===0?`<tr><td colspan="7" style="text-align:center;padding:40px;color:#6b7280">لا يوجد موظفون نشطون</td></tr>`:
+        employees.map(emp=>{
+          const att=getAtt(emp.uid);
+          return `<tr>
+            <td><div style="font-weight:700;color:#1f2937">${emp.name}</div><div style="font-size:11px;color:#6b7280">${emp.email}</div></td>
+            <td>${emp.department||"—"}</td>
+            <td>${att?statusBadge(att.status):badge("لم يُسجَّل","#6b7280")}</td>
+            <td style="font-family:monospace">${att?.checkIn?fmtTime(att.checkIn):"—"}</td>
+            <td style="font-family:monospace">${att?.checkOut?fmtTime(att.checkOut):"—"}</td>
+            <td>${att?.checkIn&&att?.checkOut?diffH(att.checkIn,att.checkOut)+"h":"—"}</td>
+            <td><button class="btn" style="background:#16a34a;color:#fff;font-size:12px;padding:5px 12px" onclick="openMarkAtt('${emp.uid}','${emp.name}','${att?.status||"present"}','${att?.id||""}')">
+              ${att?"تعديل":"تسجيل"}
+            </button></td>
+          </tr>`;
+        }).join("")}
+        </tbody></table>
+      </div>
+    </div>
+    </div>`;
+  }
+
+  onSnapshot(query(collection(db,"users"),where("role","==","employee"),where("status","==","active")), snap=>{employees=snap.docs.map(d=>d.data());render();});
+  onSnapshot(query(collection(db,"attendance"),where("date","==",STATE.attDate)), snap=>{attRecords=snap.docs.map(d=>({id:d.id,...d.data()}));render();});
+}
+
+window.openMarkAtt = (uid,name,currentStatus,attId) => {
+  openModal(`تسجيل حضور: ${name}`,`
+    <div style="margin-bottom:14px"><label>الحالة</label>
+      <select id="m-st">${["present","absent","late","onLeave"].map(s=>`<option value="${s}" ${s===currentStatus?"selected":""}>${{present:"✅ حاضر",absent:"❌ غائب",late:"⏰ متأخر",onLeave:"🌴 إجازة"}[s]}</option>`).join("")}</select>
+    </div>
+    <div style="margin-bottom:14px"><label>ملاحظات</label><textarea id="m-note" rows="2" style="resize:none" placeholder="اختياري..."></textarea></div>
+    <div style="display:flex;gap:10px">
+      <button id="mc" class="btn" style="background:#16a34a;color:#fff;flex:1;justify-content:center">✅ حفظ</button>
+      <button class="btn" style="background:none;border:2px solid #e5e7eb;color:#374151;flex:1;justify-content:center" onclick="closeModal()">إلغاء</button>
+    </div>`,
+    async ()=>{
+      const status=document.getElementById("m-st").value;
+      const notes=document.getElementById("m-note").value;
+      const data={uid,date:STATE.attDate,status,notes,employeeName:name,markedBy:"admin",updatedAt:serverTimestamp()};
+      if(attId) await updateDoc(doc(db,"attendance",attId),data);
+      else await addDoc(collection(db,"attendance"),{...data,checkIn:serverTimestamp(),createdAt:serverTimestamp()});
+      toast(`تم تسجيل الحضور لـ ${name} ✅`);
+    });
+};
+
+// ─── EMPLOYEES ───────────────────────────────────────────
+function adminEmployees() {
+  const el=document.getElementById("admin-content");
+  onSnapshot(query(collection(db,"users"),where("role","==","employee")), snap=>{
+    const emps=snap.docs.map(d=>({id:d.id,...d.data()}));
+    const sc={active:"#16a34a",pending:"#d97706",suspended:"#dc2626",rejected:"#dc2626"};
+    const sl={active:"نشط",pending:"معلق",suspended:"موقوف",rejected:"مرفوض"};
+    el.innerHTML=`<div class="fade">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+      <h2 style="font-size:20px;font-weight:900;color:#1f2937;margin:0">👥 الموظفون (${emps.length})</h2>
+      <div style="display:flex;gap:8px">
+        ${["الكل","نشط","معلق"].map((t,i)=>`<span class="badge" style="background:#dcfce7;color:#16a34a">${t} (${i===0?emps.length:emps.filter(e=>e.status===(i===1?"active":"pending")).length})</span>`).join("")}
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px">
+      ${emps.map(emp=>`<div class="card" style="border:1px solid ${sc[emp.status]||"#e5e7eb"}15;padding:16px">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+          <div style="width:44px;height:44px;border-radius:50%;background:#dcfce7;display:flex;align-items:center;justify-content:center;font-size:20px;overflow:hidden;flex-shrink:0">${emp.photo?`<img src="${emp.photo}" style="width:100%;height:100%;object-fit:cover">`:"👤"}</div>
+          <div style="flex:1;min-width:0"><div style="font-weight:800;color:#1f2937;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${emp.name}</div><div style="font-size:11px;color:#6b7280;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${emp.email}</div></div>
+          ${badge(sl[emp.status]||emp.status,sc[emp.status]||"#6b7280")}
+        </div>
+        <div style="font-size:12px;color:#374151;margin-bottom:12px;display:grid;gap:3px">
+          ${emp.department?`<div>🏢 ${emp.department}</div>`:""}
+          ${emp.jobTitle?`<div>💼 ${emp.jobTitle}</div>`:""}
+          ${emp.phone?`<div>📱 ${emp.phone}</div>`:""}
+          ${emp.salary?`<div>💰 ${Number(emp.salary).toLocaleString("ar")} ريال</div>`:""}
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn" style="background:#1e40af;color:#fff;flex:1;justify-content:center;font-size:12px;padding:7px" onclick="openEditEmp('${emp.uid}')">✏️ تعديل</button>
+          ${emp.status==="pending"?`<button class="btn" style="background:#16a34a;color:#fff;flex:1;justify-content:center;font-size:12px;padding:7px" onclick="approveUser('${emp.uid}')">✅ تفعيل</button>`:
+          `<button class="btn" style="background:none;border:2px solid ${emp.status==="active"?"#f97316":"#16a34a"};color:${emp.status==="active"?"#f97316":"#16a34a"};flex:1;justify-content:center;font-size:12px;padding:7px" onclick="toggleEmp('${emp.uid}','${emp.status}')">${emp.status==="active"?"⏸ تعليق":"▶️ تفعيل"}</button>`}
+        </div>
+      </div>`).join("")}
+    </div>
+    </div>`;
+  });
+}
+
+window.openEditEmp = async (uid) => {
+  const snap=await getDoc(doc(db,"users",uid));
+  const e=snap.data();
+  openModal(`تعديل: ${e.name}`,`
+    <div style="margin-bottom:12px"><label>الاسم الكامل</label><input id="en" value="${e.name||""}"/></div>
+    <div style="margin-bottom:12px"><label>القسم</label><input id="ed" value="${e.department||""}"/></div>
+    <div style="margin-bottom:12px"><label>المسمى الوظيفي</label><input id="ej" value="${e.jobTitle||""}"/></div>
+    <div style="margin-bottom:12px"><label>الهاتف</label><input id="ep" value="${e.phone||""}"/></div>
+    <div style="margin-bottom:16px"><label>الراتب (ريال)</label><input id="es" type="number" value="${e.salary||0}"/></div>
+    <div style="display:flex;gap:10px">
+      <button id="mc" class="btn" style="background:#16a34a;color:#fff;flex:1;justify-content:center">💾 حفظ</button>
+      <button class="btn" style="background:none;border:2px solid #e5e7eb;color:#374151;flex:1;justify-content:center" onclick="closeModal()">إلغاء</button>
+    </div>`,
+    async ()=>{
+      await updateDoc(doc(db,"users",uid),{name:document.getElementById("en").value,department:document.getElementById("ed").value,jobTitle:document.getElementById("ej").value,phone:document.getElementById("ep").value,salary:Number(document.getElementById("es").value)||0});
+      toast("تم حفظ بيانات الموظف ✅");
+    });
+};
+
+window.approveUser = async (uid) => { await updateDoc(doc(db,"users",uid),{status:"active"}); toast("تم تفعيل الموظف ✅"); };
+window.rejectUser = async (uid) => { await updateDoc(doc(db,"users",uid),{status:"rejected"}); toast("تم رفض الطلب","error"); };
+window.toggleEmp = async (uid,status) => { const ns=status==="active"?"suspended":"active"; await updateDoc(doc(db,"users",uid),{status:ns}); toast(ns==="active"?"تم تفعيل الموظف":"تم تعليق الموظف",ns==="active"?"success":"error"); };
+
+// ─── REQUESTS ────────────────────────────────────────────
+function adminRequests() {
+  const el=document.getElementById("admin-content");
+  const tl={leave:"إجازة",loan:"سلفة",custody:"عهدة",overtime:"إضافي",correction:"تصحيح"};
+  const ti={leave:"🌴",loan:"💰",custody:"📦",overtime:"⏰",correction:"📝"};
+
+  function loadReqs() {
+    const f=STATE.reqFilter;
+    const q=f==="all"?query(collection(db,"requests"),orderBy("createdAt","desc")):query(collection(db,"requests"),where("status","==",f),orderBy("createdAt","desc"));
+    onSnapshot(q, snap=>{
+      const reqs=snap.docs.map(d=>({id:d.id,...d.data()}));
+      el.innerHTML=`<div class="fade">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+        <h2 style="font-size:20px;font-weight:900;color:#1f2937;margin:0">📩 الطلبات</h2>
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap">
+        ${["pending","approved","rejected","all"].map(v=>`<button onclick="STATE.reqFilter='${v}';adminRequests()" style="padding:7px 16px;border-radius:20px;border:none;cursor:pointer;background:${f===v?"#16a34a":"#f9fafb"};color:${f===v?"#fff":"#374151"};font-weight:700;font-size:13px;font-family:'Cairo'">${{pending:"⏳ معلق",approved:"✅ موافق",rejected:"❌ مرفوض",all:"الكل"}[v]}</button>`).join("")}
+      </div>
+      ${reqs.length===0?`<div style="text-align:center;padding:48px;color:#6b7280"><div style="font-size:48px;margin-bottom:12px">📭</div>لا توجد طلبات</div>`:
+      reqs.map(r=>`<div class="card" style="margin-bottom:12px">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start">
+          <div style="display:flex;gap:12px;align-items:flex-start">
+            <span style="font-size:28px">${ti[r.type]||"📄"}</span>
+            <div>
+              <div style="font-weight:800;color:#1f2937;font-size:14px;margin-bottom:4px">${r.employeeName} — ${tl[r.type]||r.type}</div>
+              <div style="font-size:12px;color:#6b7280">
+                ${r.type==="leave"?`${{"annual":"سنوية","sick":"مرضية","unpaid":"بدون راتب"}[r.leaveType]||""} | ${r.fromDate} ← ${r.toDate} (${r.days||"?"} أيام)`:
+                r.type==="loan"?`المبلغ: ${Number(r.amount||0).toLocaleString("ar")} ريال`:
+                r.type==="custody"?r.description:r.reason||""}
+              </div>
+              <div style="font-size:11px;color:#9ca3af;margin-top:4px">${fmtDate(r.createdAt)}</div>
+            </div>
+          </div>
+          ${statusBadge(r.status)}
+        </div>
+        ${r.status==="pending"?`<div style="display:flex;gap:8px;margin-top:12px;padding-top:12px;border-top:1px solid #e5e7eb">
+          <button class="btn" style="background:#16a34a;color:#fff;font-size:13px;padding:7px 16px" onclick="approveReq('${r.id}')">✅ موافقة</button>
+          <button class="btn" style="background:none;border:2px solid #dc2626;color:#dc2626;font-size:13px;padding:7px 16px" onclick="openRejectReq('${r.id}')">❌ رفض</button>
+        </div>`:""}
+        ${r.reviewNote?`<div style="margin-top:8px;font-size:12px;color:#dc2626;background:#fee2e2;border-radius:8px;padding:6px 10px">📝 ${r.reviewNote}</div>`:""}
+      </div>`).join("")}
+      </div>`;
+    });
+  }
+  loadReqs();
+}
+
+window.approveReq = async (id) => { await updateDoc(doc(db,"requests",id),{status:"approved",reviewedAt:serverTimestamp()}); toast("تمت الموافقة على الطلب ✅"); };
+window.openRejectReq = (id) => {
+  openModal("رفض الطلب",`
+    <p style="color:#374151;font-size:14px;margin-bottom:16px">هل تريد رفض هذا الطلب؟</p>
+    <div style="margin-bottom:16px"><label>سبب الرفض (اختياري)</label><textarea id="rn" rows="3" placeholder="اكتب سبب الرفض..."></textarea></div>
+    <div style="display:flex;gap:10px">
+      <button id="mc" class="btn" style="background:#dc2626;color:#fff;flex:1;justify-content:center">❌ تأكيد الرفض</button>
+      <button class="btn" style="background:none;border:2px solid #e5e7eb;color:#374151;flex:1;justify-content:center" onclick="closeModal()">إلغاء</button>
+    </div>`,
+    async ()=>{ await updateDoc(doc(db,"requests",id),{status:"rejected",reviewedAt:serverTimestamp(),reviewNote:document.getElementById("rn").value||""}); toast("تم رفض الطلب","error"); });
+};
+
+// ─── REPORTS ─────────────────────────────────────────────
+function adminReports() {
+  const el=document.getElementById("admin-content");
+  let employees=[], attData=[];
+
+  function render() {
+    const month=STATE.repMonth;
+    const monthAtt=attData.filter(a=>a.date?.startsWith(month));
+    const getStats=uid=>{ const r=monthAtt.filter(a=>a.uid===uid); return {present:r.filter(a=>a.status==="present").length,late:r.filter(a=>a.status==="late").length,absent:r.filter(a=>a.status==="absent").length,leave:r.filter(a=>a.status==="onLeave").length}; };
+
+    el.innerHTML=`<div class="fade">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+      <h2 style="font-size:20px;font-weight:900;color:#1f2937;margin:0">📈 التقارير</h2>
+      <div style="display:flex;gap:10px;align-items:center">
+        <input type="month" value="${month}" onchange="STATE.repMonth=this.value;adminReports()" style="border:1.5px solid #e5e7eb;border-radius:8px;padding:8px 12px;font-size:14px"/>
+        <button class="btn" style="background:#16a34a;color:#fff" onclick="exportCSV()">📊 تصدير CSV</button>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px">
+      ${[[monthAtt.length,"إجمالي السجلات","#1e40af","#dbeafe"],[monthAtt.filter(a=>a.status==="present"||a.status==="late").length,"حاضر/متأخر","#16a34a","#dcfce7"],[monthAtt.filter(a=>a.status==="absent").length,"غياب","#dc2626","#fee2e2"],[monthAtt.filter(a=>a.status==="onLeave").length,"إجازات","#7c3aed","#ede9fe"]].map(([v,l,c,bg])=>`
+      <div class="card" style="background:${bg};padding:16px"><div style="font-size:22px;font-weight:900;color:${c}">${v}</div><div style="font-size:12px;font-weight:700;color:${c}">${l}</div></div>`).join("")}
+    </div>
+    <div class="card" style="padding:0;overflow:hidden">
+      <div style="padding:16px 20px;border-bottom:1px solid #e5e7eb"><h3 style="margin:0;font-size:15px;font-weight:800;color:#1f2937">تقرير الحضور — ${month}</h3></div>
+      <div style="overflow-x:auto">
+        <table><thead><tr><th>الموظف</th><th>القسم</th><th>حاضر</th><th>متأخر</th><th>غياب</th><th>إجازة</th><th>نسبة الحضور</th></tr></thead>
+        <tbody>${employees.map(emp=>{
+          const s=getStats(emp.uid);
+          const total=s.present+s.late+s.absent+s.leave;
+          const pct=total>0?Math.round(((s.present+s.late)/total)*100):0;
+          const pc=pct>=80?"#16a34a":pct>=60?"#f97316":"#dc2626";
+          return `<tr>
+            <td><div style="font-weight:700">${emp.name}</div></td>
+            <td>${emp.department||"—"}</td>
+            <td>${badge(s.present,"#16a34a")}</td><td>${badge(s.late,"#f97316")}</td><td>${badge(s.absent,"#dc2626")}</td><td>${badge(s.leave,"#1e40af")}</td>
+            <td><div style="display:flex;align-items:center;gap:8px"><div style="flex:1;height:6px;background:#e5e7eb;border-radius:3px"><div style="width:${pct}%;height:100%;background:${pc};border-radius:3px"></div></div><span style="font-size:12px;font-weight:700;color:${pc}">${pct}%</span></div></td>
+          </tr>`;
+        }).join("")}</tbody></table>
+      </div>
+    </div>
+    </div>`;
+  }
+
+  onSnapshot(query(collection(db,"users"),where("role","==","employee"),where("status","==","active")), snap=>{employees=snap.docs.map(d=>d.data());render();});
+  const start=STATE.repMonth+"-01";
+  const endDate=new Date(STATE.repMonth); endDate.setMonth(endDate.getMonth()+1);
+  const end=endDate.toISOString().slice(0,10);
+  onSnapshot(query(collection(db,"attendance"),where("date",">=",start),where("date","<",end)), snap=>{attData=snap.docs.map(d=>d.data());render();});
+}
+
+window.exportCSV = async () => {
+  const snap=await import("https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js").then(m=>m.getDocs(query(collection(db,"users"),where("role","==","employee"),where("status","==","active"))));
+  const emps=snap.docs.map(d=>d.data());
+  const start=STATE.repMonth+"-01";
+  const endDate=new Date(STATE.repMonth); endDate.setMonth(endDate.getMonth()+1);
+  const attSnap=await import("https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js").then(m=>m.getDocs(query(collection(db,"attendance"),where("date",">=",start),where("date","<",endDate.toISOString().slice(0,10)))));
+  const attData=attSnap.docs.map(d=>d.data());
+  let csv="\uFEFFالموظف,القسم,حاضر,متأخر,غياب,إجازة\n";
+  emps.forEach(e=>{
+    const r=attData.filter(a=>a.uid===e.uid);
+    csv+=`${e.name},${e.department||""},${r.filter(a=>a.status==="present").length},${r.filter(a=>a.status==="late").length},${r.filter(a=>a.status==="absent").length},${r.filter(a=>a.status==="onLeave").length}\n`;
+  });
+  const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv;charset=utf-8;"})); a.download=`حضور_${STATE.repMonth}.csv`; a.click();
+  toast("تم تصدير التقرير ✅");
+};
+
+// ══════════════════════════════════════════════════════════
+// 📱 EMPLOYEE APP
+// ══════════════════════════════════════════════════════════
+function renderEmployee() {
+  const u=STATE.userDoc;
+  document.getElementById("root").innerHTML=`
+  <div id="emp-shell" style="direction:rtl;background:#f9fafb;min-height:100vh;max-width:480px;margin:0 auto;display:flex;flex-direction:column">
+    <div style="background:linear-gradient(135deg,#0f4c1e,#16a34a);padding:16px 20px 20px;position:sticky;top:0;z-index:50">
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <div><div style="font-size:13px;color:rgba(255,255,255,.7)">مرحباً 👋</div><div style="font-size:18px;font-weight:900;color:#fff">${u.name}</div></div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <div style="font-size:11px;color:rgba(255,255,255,.7);text-align:left">${new Date().toLocaleDateString("ar-SA",{weekday:"short",month:"short",day:"numeric"})}</div>
+          ${u.photo?`<img src="${u.photo}" style="width:36px;height:36px;border-radius:50%;object-fit:cover;border:2px solid rgba(255,255,255,.5)">`:`<div style="width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;font-size:18px">👤</div>`}
+        </div>
+      </div>
+    </div>
+    <div id="emp-content" style="flex:1;overflow-y:auto;padding-bottom:72px"></div>
+    <div id="emp-nav" style="position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:480px;background:#fff;border-top:1px solid #e5e7eb;display:flex;box-shadow:0 -4px 20px rgba(0,0,0,.08);z-index:50"></div>
+  </div>`;
+  updateEmpNav();
+  loadEmpTab();
+}
+
+function updateEmpNav() {
+  const tabs=[{id:"home",l:"الرئيسية",ic:"🏠"},{id:"attendance",l:"حضوري",ic:"📋"},{id:"requests",l:"طلباتي",ic:"📩"},{id:"profile",l:"ملفي",ic:"👤"}];
+  const nav=document.getElementById("emp-nav");
+  if(!nav) return;
+  nav.innerHTML=tabs.map(t=>`
+    <button onclick="goEmpTab('${t.id}')" style="flex:1;padding:10px 4px 8px;border:none;background:transparent;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px;font-family:Cairo,sans-serif">
+      <span style="font-size:20px">${t.ic}</span>
+      <span style="font-size:10px;font-weight:700;color:${STATE.empTab===t.id?"#16a34a":"#6b7280"}">${t.l}</span>
+      ${STATE.empTab===t.id?`<div style="width:20px;height:3px;background:#16a34a;border-radius:2px;margin-top:2px"></div>`:""}
+    </button>`).join("");
+}
+
+window.goEmpTab = (tab) => {
+  STATE.empTab = tab;
+  updateEmpNav();
+  loadEmpTab();
+};
+
+function loadEmpTab() {
+  const fns={home:empHome,attendance:empAttendance,requests:empRequests,profile:empProfile};
+  (fns[STATE.empTab]||empHome)();
+}
+
+
+// ─── EMP HOME ────────────────────────────────────────────
+function empHome() {
+  const el=document.getElementById("emp-content");
+  const uid=STATE.userDoc.uid;
+
+  onSnapshot(query(collection(db,"attendance"),where("uid","==",uid),where("date","==",todayStr())), snap=>{
+    const att=snap.empty?null:{id:snap.docs[0].id,...snap.docs[0].data()};
+    el.innerHTML=`<div class="fade" style="padding:16px">
+    <div class="card" style="background:linear-gradient(135deg,#16a34a,#0f4c1e);margin-bottom:16px;text-align:center;padding:24px">
+      <div id="live-clock" style="font-size:40px;font-weight:900;color:#fff;letter-spacing:2px;font-variant-numeric:tabular-nums">${new Date().toLocaleTimeString("ar-SA",{hour:"2-digit",minute:"2-digit",second:"2-digit"})}</div>
+      <div style="font-size:13px;color:rgba(255,255,255,.75);margin-top:4px">${new Date().toLocaleDateString("ar-SA",{weekday:"long",year:"numeric",month:"long",day:"numeric"})}</div>
+    </div>
+
+    ${!att?.checkIn?`
+    <div class="card" style="margin-bottom:16px;border:2px solid #16a34a20">
+      <div style="font-size:14px;font-weight:800;color:#1f2937;margin-bottom:10px">🏗️ كود المشروع (إلزامي للحضور)</div>
+      <input id="project-code" type="text" placeholder="مثال: PRJ-2024-001" style="margin-bottom:8px;font-size:16px;text-align:center;font-weight:700;letter-spacing:2px"/>
+      <div style="font-size:12px;color:#6b7280">أدخل كود المشروع الذي ستعمل عليه اليوم</div>
+    </div>`:""}
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+      <button onclick="doCheckIn()" ${att?.checkIn?"disabled":""} style="padding:18px 12px;border-radius:16px;border:none;cursor:pointer;background:${att?.checkIn?"#f9fafb":"#dcfce7"};color:${att?.checkIn?"#6b7280":"#16a34a"};display:flex;flex-direction:column;align-items:center;gap:6px;opacity:${att?.checkIn?0.7:1};box-shadow:${att?.checkIn?"none":"0 4px 20px rgba(22,163,74,.2)"}">
+        <span style="font-size:28px">✅</span>
+        <span style="font-size:14px;font-weight:800;font-family:'Cairo'">تسجيل حضور</span>
+        ${att?.checkIn?`<span style="font-size:11px;font-family:'Cairo'">${fmtTime(att.checkIn)}</span>`:""}
+      </button>
+      <button onclick="doCheckOut()" ${!att?.checkIn||att?.checkOut?"disabled":""} style="padding:18px 12px;border-radius:16px;border:none;cursor:pointer;background:${att?.checkOut?"#f9fafb":!att?.checkIn?"#f9fafb":"#fee2e2"};color:${att?.checkOut||!att?.checkIn?"#6b7280":"#dc2626"};display:flex;flex-direction:column;align-items:center;gap:6px;opacity:${!att?.checkIn||att?.checkOut?0.5:1};box-shadow:${att?.checkIn&&!att?.checkOut?"0 4px 20px rgba(220,38,38,.2)":"none"}">
+        <span style="font-size:28px">🚪</span>
+        <span style="font-size:14px;font-weight:800;font-family:'Cairo'">تسجيل انصراف</span>
+        ${att?.checkOut?`<span style="font-size:11px;font-family:'Cairo'">${fmtTime(att.checkOut)}</span>`:""}
+      </button>
+    </div>
+    ${att?`<div class="card" style="background:#dcfce7;margin-bottom:16px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div style="font-size:14px;font-weight:700;color:#0f4c1e">📊 حالة اليوم</div>${statusBadge(att.status)}
+      </div>
+      <div style="display:flex;gap:16px;flex-wrap:wrap">
+        <div><div style="font-size:11px;color:#6b7280">حضور</div><div style="font-size:14px;font-weight:700;color:#1f2937">${fmtTime(att.checkIn)}</div></div>
+        <div><div style="font-size:11px;color:#6b7280">انصراف</div><div style="font-size:14px;font-weight:700;color:#1f2937">${att.checkOut?fmtTime(att.checkOut):"—"}</div></div>
+        ${att.checkOut?`<div><div style="font-size:11px;color:#6b7280">ساعات</div><div style="font-size:14px;font-weight:700;color:#1f2937">${diffH(att.checkIn,att.checkOut)}h</div></div>`:""}
+        ${att.projectCode?`<div><div style="font-size:11px;color:#6b7280">كود المشروع</div><div style="font-size:14px;font-weight:700;color:#16a34a">${att.projectCode}</div></div>`:""}
+      </div>
+    </div>`:`<div class="card" style="text-align:center;padding:20px;background:#fffbeb"><div style="font-size:24px;margin-bottom:6px">⏰</div><div style="font-size:14px;font-weight:700;color:#d97706">لم تسجّل حضورك اليوم بعد</div></div>`}
+    </div>`;
+    clearInterval(window._clockInt);
+    window._clockInt=setInterval(()=>{const c=document.getElementById("live-clock");if(c)c.textContent=new Date().toLocaleTimeString("ar-SA",{hour:"2-digit",minute:"2-digit",second:"2-digit"});},1000);
+  });
+}
+
+window.doCheckIn = async () => {
+  const uid=STATE.userDoc.uid;
+  const projectCode=document.getElementById("project-code")?.value.trim();
+  if(!projectCode){toast("يرجى إدخال كود المشروع أولاً ⚠️","error");document.getElementById("project-code")?.focus();return;}
+  const {getDocs:gd}=await import("https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js");
+  const snap=await gd(query(collection(db,"attendance"),where("uid","==",uid),where("date","==",todayStr())));
+  if(!snap.empty&&snap.docs[0].data().checkIn){toast("تم تسجيل حضورك مسبقاً","info");return;}
+  const hour=new Date().getHours();
+  const status=hour>=9?"late":"present";
+  const data={uid,employeeName:STATE.userDoc.name,date:todayStr(),status,projectCode,checkIn:serverTimestamp(),createdAt:serverTimestamp()};
+  if(!snap.empty) await updateDoc(doc(db,"attendance",snap.docs[0].id),{checkIn:serverTimestamp(),status,projectCode});
+  else await addDoc(collection(db,"attendance"),data);
+  toast(status==="late"?"تم تسجيل حضورك (متأخر) ⏰":"تم تسجيل حضورك ✅");
+};
+
+window.doCheckOut = async () => {
+  const uid=STATE.userDoc.uid;
+  const {getDocs:gd}=await import("https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js");
+  const snap=await gd(query(collection(db,"attendance"),where("uid","==",uid),where("date","==",todayStr())));
+  if(snap.empty){toast("سجّل حضورك أولاً","info");return;}
+  const att=snap.docs[0];
+  if(att.data().checkOut){toast("تم تسجيل انصرافك مسبقاً","info");return;}
+  await updateDoc(doc(db,"attendance",att.id),{checkOut:serverTimestamp()});
+  toast("تم تسجيل انصرافك ✅");
+};
+
+
+// ─── EMP ATTENDANCE ──────────────────────────────────────
+function empAttendance() {
+  const el=document.getElementById("emp-content");
+  const uid=STATE.userDoc.uid;
+  if(!STATE.attCalMonth) STATE.attCalMonth=new Date().toISOString().slice(0,7);
+  if(!STATE.attFilter) STATE.attFilter="all";
+
+  function renderAtt(records) {
+    const month=STATE.attCalMonth;
+    const filtered=STATE.attFilter==="all"?records:records.filter(r=>r.status===STATE.attFilter);
+    const stats={
+      present:records.filter(r=>r.status==="present").length,
+      late:records.filter(r=>r.status==="late").length,
+      absent:records.filter(r=>r.status==="absent").length,
+      leave:records.filter(r=>r.status==="onLeave").length
+    };
+
+    // Build calendar
+    const year=parseInt(month.split("-")[0]);
+    const mon=parseInt(month.split("-")[1])-1;
+    const firstDay=new Date(year,mon,1).getDay();
+    const daysInMonth=new Date(year,mon+1,0).getDate();
+    const attMap={};
+    records.forEach(r=>{ attMap[r.date]=r; });
+    const dayColors={present:"#16a34a",late:"#f97316",absent:"#dc2626",onLeave:"#1e40af"};
+    
+    let calCells="";
+    const dayNames=["ح","ن","ث","ر","خ","ج","س"];
+    calCells+=dayNames.map(d=>`<div style="text-align:center;font-size:11px;font-weight:800;color:#6b7280;padding:4px">${d}</div>`).join("");
+    
+    // empty cells before first day
+    for(let i=0;i<firstDay;i++) calCells+=`<div></div>`;
+    for(let d=1;d<=daysInMonth;d++){
+      const dateStr=`${year}-${String(mon+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+      const rec=attMap[dateStr];
+      const isToday=dateStr===new Date().toISOString().split("T")[0];
+      const color=rec?dayColors[rec.status]:"transparent";
+      calCells+=`<div onclick="STATE.attCalSel='${dateStr}';document.getElementById('att-detail').innerHTML=getAttDetail('${dateStr}',window._attRecords||[])" style="
+        text-align:center;padding:6px 2px;border-radius:8px;cursor:pointer;
+        background:${rec?color+"20":"transparent"};
+        border:2px solid ${isToday?"#16a34a":rec?color:"transparent"};
+        font-size:12px;font-weight:${isToday?"900":"600"};
+        color:${rec?color:isToday?"#16a34a":"#374151"}
+      ">${d}</div>`;
+    }
+
+    el.innerHTML=`<div class="fade" style="padding:16px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+      <h3 style="margin:0;font-size:16px;font-weight:900;color:#1f2937">📋 سجل الحضور</h3>
+      <div style="display:flex;align-items:center;gap:8px">
+        <button onclick="prevAttMonth()" style="width:28px;height:28px;border-radius:50%;border:1.5px solid #e5e7eb;background:#fff;cursor:pointer;font-size:14px">‹</button>
+        <span style="font-size:13px;font-weight:700;color:#1f2937">${new Date(year,mon).toLocaleDateString("ar-SA",{month:"long",year:"numeric"})}</span>
+        <button onclick="nextAttMonth()" style="width:28px;height:28px;border-radius:50%;border:1.5px solid #e5e7eb;background:#fff;cursor:pointer;font-size:14px">›</button>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px">
+      ${[["✅",stats.present,"حاضر","#16a34a","present"],["⏰",stats.late,"متأخر","#f97316","late"],["❌",stats.absent,"غياب","#dc2626","absent"],["🌴",stats.leave,"إجازة","#1e40af","onLeave"]].map(([ic,v,l,c,key])=>`
+      <div onclick="STATE.attFilter=STATE.attFilter==='${key}'?'all':'${key}';empAttendance()" style="padding:10px 8px;text-align:center;background:${STATE.attFilter===key?c:c+"15"};border-radius:12px;cursor:pointer;border:2px solid ${STATE.attFilter===key?c:"transparent"};transition:all .2s">
+        <div style="font-size:18px">${ic}</div>
+        <div style="font-size:18px;font-weight:900;color:${STATE.attFilter===key?"#fff":c}">${v}</div>
+        <div style="font-size:10px;color:${STATE.attFilter===key?"#fff":c};font-weight:700">${l}</div>
+      </div>`).join("")}
+    </div>
+
+    <div class="card" style="margin-bottom:16px;padding:16px">
+      <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px">${calCells}</div>
+    </div>
+
+    <div id="att-detail" style="margin-bottom:16px"></div>
+
+    <div style="margin-bottom:8px;font-size:13px;font-weight:800;color:#1f2937">
+      ${STATE.attFilter==="all"?"جميع السجلات":{"present":"✅ الحضور","late":"⏰ التأخير","absent":"❌ الغياب","onLeave":"🌴 الإجازات"}[STATE.attFilter]} (${filtered.length})
+    </div>
+    ${filtered.length===0?`<div style="text-align:center;padding:30px;color:#6b7280"><div style="font-size:36px;margin-bottom:8px">📭</div>لا توجد سجلات</div>`:
+    filtered.map(r=>`<div class="card" style="margin-bottom:8px;padding:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <div style="font-weight:700;color:#1f2937;font-size:14px">${new Date(r.date+"T12:00:00").toLocaleDateString("ar-SA",{weekday:"short",month:"short",day:"numeric"})}</div>
+          <div style="font-size:12px;color:#6b7280;margin-top:2px">
+            ${r.checkIn?"🕐 "+fmtTime(r.checkIn):"لم يُسجَّل"}${r.checkOut?" 🕔 "+fmtTime(r.checkOut):""}${r.checkIn&&r.checkOut?" ("+diffH(r.checkIn,r.checkOut)+"h)":""}
+          </div>
+          ${r.projectCode?`<div style="font-size:11px;color:#16a34a;font-weight:700;margin-top:2px">🏗️ ${r.projectCode}</div>`:""}
+        </div>
+        ${statusBadge(r.status)}
+      </div>
+    </div>`).join("")}
+    </div>`;
+    window._attRecords=records;
+  }
+
+  onSnapshot(query(collection(db,"attendance"),where("uid","==",uid)), snap=>{
+    const all=snap.docs.map(d=>d.data());
+    const month=STATE.attCalMonth;
+    const records=all.filter(r=>r.date&&r.date.startsWith(month)).sort((a,b)=>b.date.localeCompare(a.date));
+    renderAtt(records);
+  });
+}
+
+window.getAttDetail = (dateStr, records) => {
+  const r=records.find(x=>x.date===dateStr);
+  if(!r) return `<div class="card" style="background:#f9fafb;padding:12px;text-align:center;font-size:13px;color:#6b7280">لا يوجد تسجيل لـ ${new Date(dateStr+"T12:00:00").toLocaleDateString("ar-SA",{weekday:"long",month:"long",day:"numeric"})}</div>`;
+  return `<div class="card" style="padding:14px;border:2px solid #16a34a30">
+    <div style="display:flex;justify-content:space-between;margin-bottom:8px">
+      <div style="font-weight:800;color:#1f2937">${new Date(dateStr+"T12:00:00").toLocaleDateString("ar-SA",{weekday:"long",month:"long",day:"numeric"})}</div>
+      ${statusBadge(r.status)}
+    </div>
+    <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:13px">
+      <div><span style="color:#6b7280">حضور: </span><strong>${fmtTime(r.checkIn)}</strong></div>
+      ${r.checkOut?`<div><span style="color:#6b7280">انصراف: </span><strong>${fmtTime(r.checkOut)}</strong></div>`:""}
+      ${r.checkIn&&r.checkOut?`<div><span style="color:#6b7280">مجموع: </span><strong>${diffH(r.checkIn,r.checkOut)}h</strong></div>`:""}
+      ${r.projectCode?`<div><span style="color:#6b7280">المشروع: </span><strong style="color:#16a34a">${r.projectCode}</strong></div>`:""}
+    </div>
+  </div>`;
+};
+
+window.prevAttMonth = () => {
+  const [y,m]=STATE.attCalMonth.split("-").map(Number);
+  const d=new Date(y,m-2,1);
+  STATE.attCalMonth=d.toISOString().slice(0,7);
+  STATE.attCalSel=null;
+  empAttendance();
+};
+window.nextAttMonth = () => {
+  const [y,m]=STATE.attCalMonth.split("-").map(Number);
+  const d=new Date(y,m,1);
+  STATE.attCalMonth=d.toISOString().slice(0,7);
+  STATE.attCalSel=null;
+  empAttendance();
+};
+
+// ─── EMP REQUESTS ────────────────────────────────────────
+function empRequests() {
+  const el=document.getElementById("emp-content");
+  const uid=STATE.userDoc.uid;
+  const tab=STATE.empReqTab||"new";
+
+  const reqTypes=[["leave","🌴","إجازة"],["loan","💰","سلفة"],["custody","📦","عهدة"],["overtime","⏰","إضافي"],["correction","📝","تصحيح"]];
+  const f=STATE.reqForm||{type:"leave",leaveType:"annual",fromDate:todayStr(),toDate:todayStr(),reason:"",amount:"",description:""};
+  const calcDays=(from,to)=>Math.max(1,Math.ceil((new Date(to)-new Date(from))/86400000)+1);
+
+  function buildForm() {
+    return `
+    <div style="display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap">
+      ${reqTypes.map(([v,ic,l])=>`
+      <button onclick="STATE.reqForm={...STATE.reqForm,type:'${v}'};empRequests()" style="
+        padding:8px 14px;border-radius:20px;border:2px solid ${f.type===v?"#16a34a":"#e5e7eb"};
+        background:${f.type===v?"#16a34a":"#fff"};color:${f.type===v?"#fff":"#374151"};
+        font-weight:700;font-size:13px;cursor:pointer;font-family:Cairo,sans-serif;display:flex;align-items:center;gap:4px"
+      >${ic} ${l}</button>`).join("")}
+    </div>
+    <div class="card">
+      ${f.type==="leave"?`
+        <div style="margin-bottom:12px"><label>نوع الإجازة</label>
+        <select id="rlt" style="background:#f9fafb">
+          ${[["annual","سنوية"],["sick","مرضية"],["unpaid","بدون راتب"]].map(([v,l])=>`<option value="${v}" ${f.leaveType===v?"selected":""}>${l}</option>`).join("")}
+        </select></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:8px">
+          <div><label>من تاريخ</label><input type="date" id="rfrom" value="${f.fromDate}"/></div>
+          <div><label>إلى تاريخ</label><input type="date" id="rto" value="${f.toDate}"/></div>
+        </div>
+        <div style="background:#dcfce7;border-radius:8px;padding:8px 14px;font-size:13px;color:#0f4c1e;font-weight:700;margin-bottom:12px">📅 عدد الأيام: ${calcDays(f.fromDate,f.toDate)} يوم</div>`
+      :f.type==="loan"?`
+        <div style="margin-bottom:12px"><label>المبلغ المطلوب (ريال) *</label><input id="ramt" type="number" placeholder="0" value="${f.amount||""}"/></div>`
+      :f.type==="custody"?`
+        <div style="margin-bottom:12px"><label>وصف العهدة *</label><textarea id="rdesc" rows="3" style="resize:none" placeholder="نوع العهدة والغرض...">${f.description||""}</textarea></div>
+        <div style="margin-bottom:12px"><label>القيمة التقديرية (ريال)</label><input id="ramt" type="number" placeholder="0" value="${f.amount||""}"/></div>`
+      :f.type==="overtime"?`
+        <div style="margin-bottom:12px"><label>التاريخ</label><input type="date" id="rfrom" value="${f.fromDate}"/></div>
+        <div style="margin-bottom:12px"><label>عدد الساعات الإضافية</label><input id="ramt" type="number" placeholder="0" value="${f.amount||""}"/></div>`
+      :`<div style="margin-bottom:12px"><label>التاريخ المراد تصحيحه</label><input type="date" id="rfrom" value="${f.fromDate}"/></div>`}
+      ${f.type!=="custody"?`<div style="margin-bottom:16px"><label>السبب ${f.type!=="overtime"?"*":""}</label><textarea id="rreason" rows="3" style="resize:none" placeholder="اكتب السبب...">${f.reason||""}</textarea></div>`:""}
+      <button id="req-submit" onclick="submitReq()" style="width:100%;padding:13px;background:#16a34a;color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:800;cursor:pointer;font-family:Cairo,sans-serif">📨 إرسال الطلب</button>
+    </div>`;
+  }
+
+  el.innerHTML=`<div class="fade" style="padding:16px">
+  <div style="display:flex;background:#f9fafb;border-radius:12px;padding:4px;margin-bottom:20px;gap:4px">
+    <button onclick="goReqTab('new')" style="flex:1;padding:9px;border-radius:9px;border:none;background:${tab==="new"?"#fff":"transparent"};color:${tab==="new"?"#16a34a":"#6b7280"};font-weight:800;font-size:14px;cursor:pointer;font-family:Cairo,sans-serif;box-shadow:${tab==="new"?"0 1px 6px rgba(0,0,0,.1)":"none"}">➕ طلب جديد</button>
+    <button onclick="goReqTab('history')" style="flex:1;padding:9px;border-radius:9px;border:none;background:${tab==="history"?"#fff":"transparent"};color:${tab==="history"?"#16a34a":"#6b7280"};font-weight:800;font-size:14px;cursor:pointer;font-family:Cairo,sans-serif;box-shadow:${tab==="history"?"0 1px 6px rgba(0,0,0,.1)":"none"}">📋 طلباتي</button>
+  </div>
+  <div id="req-content">${tab==="new"?buildForm():`<div style="text-align:center;padding:30px"><div class="spinner"></div></div>`}</div>
+  </div>`;
+
+  if(tab==="history") {
+    const tl={leave:"إجازة",loan:"سلفة",custody:"عهدة",overtime:"إضافي",correction:"تصحيح"};
+    const ti={leave:"🌴",loan:"💰",custody:"📦",overtime:"⏰",correction:"📝"};
+    onSnapshot(query(collection(db,"requests"),where("uid","==",uid)), snap=>{
+      const reqs=snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>{
+        const ta=a.createdAt?.toDate?a.createdAt.toDate():new Date(0);
+        const tb=b.createdAt?.toDate?b.createdAt.toDate():new Date(0);
+        return tb-ta;
+      });
+      const rc=document.getElementById("req-content");
+      if(!rc) return;
+      rc.innerHTML=reqs.length===0
+        ?`<div style="text-align:center;padding:40px;color:#6b7280"><div style="font-size:40px;margin-bottom:10px">📭</div>لا توجد طلبات بعد</div>`
+        :reqs.map(r=>`<div class="card" style="margin-bottom:12px">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
+            <div style="display:flex;gap:8px;align-items:center">
+              <span style="font-size:22px">${ti[r.type]||"📄"}</span>
+              <div>
+                <div style="font-weight:800;color:#1f2937;font-size:14px">${tl[r.type]||r.type}${r.leaveType?" — "+{"annual":"سنوية","sick":"مرضية","unpaid":"بدون راتب"}[r.leaveType]:""}</div>
+                <div style="font-size:12px;color:#6b7280">${fmtDate(r.createdAt)}</div>
+              </div>
+            </div>
+            ${statusBadge(r.status)}
+          </div>
+          <div style="font-size:12px;color:#374151;background:#f9fafb;border-radius:8px;padding:8px 12px">
+            ${r.type==="leave"?`${r.fromDate} → ${r.toDate} (${r.days||"?"} أيام)`:r.type==="loan"?`المبلغ: ${Number(r.amount||0).toLocaleString("ar")} ريال`:r.type==="custody"?r.description:r.reason||""}
+            ${r.reviewNote?`<div style="margin-top:4px;color:#dc2626;font-weight:700">📝 ملاحظة: ${r.reviewNote}</div>`:""}
+          </div>
+        </div>`).join("");
+    });
+  }
+}
+
+window.goReqTab = (tab) => {
+  STATE.empReqTab=tab;
+  empRequests();
+};
+
+window.submitReq = async () => {
+  const u=STATE.userDoc;
+  const f=STATE.reqForm||{};
+  const reason=document.getElementById("rreason")?.value.trim()||"";
+  const amount=document.getElementById("ramt")?.value||"";
+  const desc=document.getElementById("rdesc")?.value.trim()||"";
+  const ltype=document.getElementById("rlt")?.value||f.leaveType||"annual";
+  const fromDate=document.getElementById("rfrom")?.value||f.fromDate||todayStr();
+  const toDate=document.getElementById("rto")?.value||f.toDate||todayStr();
+  if(f.type!=="custody"&&f.type!=="overtime"&&!reason){toast("يرجى كتابة السبب","error");return;}
+  const calcDays=(from,to)=>Math.max(1,Math.ceil((new Date(to)-new Date(from))/86400000)+1);
+  const btn=document.getElementById("req-submit");
+  if(btn){btn.disabled=true;btn.textContent="⏳ جاري الإرسال...";}
+  try{
+    await addDoc(collection(db,"requests"),{
+      uid:u.uid,employeeName:u.name,employeeEmail:u.email,
+      type:f.type,status:"pending",createdAt:serverTimestamp(),
+      ...(f.type==="leave"?{leaveType:ltype,fromDate,toDate,days:calcDays(fromDate,toDate),reason}:
+          f.type==="loan"?{amount,reason}:
+          f.type==="custody"?{description:desc,amount}:
+          f.type==="overtime"?{date:fromDate,hours:amount,reason}:
+          {date:fromDate,reason}),
+    });
+    toast("تم إرسال الطلب بنجاح ✅");
+    STATE.reqForm={type:"leave",leaveType:"annual",fromDate:todayStr(),toDate:todayStr(),reason:"",amount:"",description:""};
+    STATE.empReqTab="history";
+    empRequests();
+  }catch(e){toast("خطأ: "+e.message,"error");if(btn){btn.disabled=false;btn.textContent="📨 إرسال الطلب";}}
+};
+
+
+// ─── EMP PROFILE ─────────────────────────────────────────
+function empProfile() {
+  const el=document.getElementById("emp-content");
+  const u=STATE.userDoc;
+  el.innerHTML=`<div class="fade" style="padding:16px">
+  <div class="card" style="text-align:center;padding:28px;margin-bottom:16px">
+    <div style="width:72px;height:72px;border-radius:50%;background:#dcfce7;display:flex;align-items:center;justify-content:center;font-size:28px;margin:0 auto 12px;border:3px solid #16a34a;overflow:hidden">
+      ${u.photo?`<img src="${u.photo}" style="width:100%;height:100%;object-fit:cover">`:"👤"}
+    </div>
+    <div style="font-size:18px;font-weight:900;color:#1f2937">${u.name}</div>
+    <div style="font-size:13px;color:#6b7280">${u.email}</div>
+    <div style="margin-top:10px">${badge(u.status==="active"?"نشط ✅":"معلق",u.status==="active"?"#16a34a":"#f97316")}</div>
+  </div>
+  <div class="card" style="margin-bottom:16px;padding:0;overflow:hidden">
+    ${[["📧","البريد الإلكتروني",u.email],["🏢","القسم",u.department||"—"],["💼","المسمى الوظيفي",u.jobTitle||"—"],["📱","الهاتف",u.phone||"—"],["💰","الراتب",u.salary?Number(u.salary).toLocaleString("ar")+" ريال":"—"],["📅","تاريخ الالتحاق",fmtDate(u.joinDate)]].map(([ic,l,v],i,arr)=>`
+    <div style="display:flex;align-items:center;gap:12px;padding:13px 16px;border-bottom:${i<arr.length-1?"1px solid #e5e7eb":"none"}">
+      <span style="font-size:18px;width:24px;text-align:center">${ic}</span>
+      <div><div style="font-size:11px;color:#6b7280">${l}</div><div style="font-size:14px;font-weight:700;color:#1f2937">${v}</div></div>
+    </div>`).join("")}
+  </div>
+  <button class="btn" style="background:none;border:2px solid #dc2626;color:#dc2626;width:100%;justify-content:center;padding:12px" onclick="doLogout()">🚪 تسجيل الخروج</button>
+  </div>`;
+}
+
+</script>
+</body>
+</html>
